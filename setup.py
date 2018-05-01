@@ -24,7 +24,7 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     packages=find_packages(),
-    install_requires=['vk_api', 'requests'],
+    install_requires=['vk_api', 'requests', 'tqdm'],
     extras_require={'socks': ['PySocks']},
     python_requires='==3.6.*',
     entry_points={
