@@ -50,7 +50,7 @@ class VkDialogBackuper(VkApi):
         else:
             self.output = 'zip'
             if not filename:
-                filename = 'vk-dialog-backup-{}.zip'.format(datetime.now().strftime('%m-%d-%Y-%H-%M-%S'))
+                filename = 'vk-dialog-backup-{}.zip'.format(datetime.now().strftime('%d-%m-%Y-%H-%M-%S'))
             elif os.path.splitext(filename)[1] != '.zip':
                 filename += '.zip'
             logger.info('Открытие файла ' + filename)
