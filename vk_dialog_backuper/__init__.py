@@ -1,6 +1,7 @@
-'''использование: vk-dialog-backuper [опции]
+'''\
+usage: vk-dialog-backuper [options]
 
-опции:
+options:
     -h --help                 вывести это сообщение и выйти
     -v --version              вывести версию программы и выйти
     -t --token TOKEN          авторизоваться через токен
@@ -23,12 +24,12 @@ from .backuper import VkDialogBackuper
 from .utils import docopt
 
 
-__version__ = '1.0'
+__version__ = '1.0.1'
 __author__ = 'alfred richardsn'
 __description__ = 'утилита для бэкапа сообщений вк'
 
 
-def start(args):
+def start_backuper(args):
     kwargs = {}
 
     if args['--login'] and args['--password']:
@@ -47,27 +48,20 @@ def start(args):
         else:
             kwargs['proxies'] = {'http': 'http://' + parsed.netloc, 'https': 'https://' + parsed.netloc}
 
-    kwargs['file_name'] = args['--file']
+    kwargs['filename'] = args['--file']
     kwargs['directory'] = args['--directory']
     kwargs['leave_chats'] = args['--leave-chats']
     kwargs['delete_dialogs'] = args['--delete-dialogs']
 
     backuper = VkDialogBackuper(**kwargs)
-    backuper.backup()
+    backuper.run()
 
 
 def main():
-    args = docopt(
-        __doc__.replace('использование', 'usage', 1).replace('опции', 'options', 2),
-        help=False, version=__version__
-    )
-
-    if args['--help']:
-        print(__doc__)
-        sys.exit()
+    args = docopt(__doc__, version=__version__)
 
     try:
-        start(args)
+        start_backuper(args)
     except KeyboardInterrupt:
         print()
         sys.exit()

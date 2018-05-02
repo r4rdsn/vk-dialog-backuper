@@ -14,28 +14,15 @@ from .utils import ask_yes_or_no, logger
 
 
 class VkDialogBackuper(VkApi):
-    def __init__(self, *args, file_name=None, directory=None, leave_chats=False, delete_dialogs=False, proxies=None, **kwargs):
-        self.leave_chats = leave_chats
-        self.delete_dialogs = delete_dialogs
-
-        if directory:
-            self.directory = directory
-            self._write = self._dir_write
-        else:
-            if not file_name:
-                file_name = 'vk-dialog-backup-{}.zip'.format(datetime.now().strftime('%m-%d-%Y-%H-%M-%S'))
-            elif os.path.splitext(file_name)[1] != '.zip':
-                file_name += '.zip'
-            self.zipf = ZipFile(file_name, 'w')
-            self._write = self._zip_write
-
+    def __init__(self, *args, filename=None, directory=None, leave_chats=False, delete_dialogs=False, proxies=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.http.proxies = proxies
 
         if not self.token['access_token']:
             logger.info('Авторизация')
             self.auth()
 
-        self.http.proxies = proxies
         self.vk = self.get_api()
         self.tools = VkTools(self)
 
@@ -44,6 +31,9 @@ class VkDialogBackuper(VkApi):
             user = pool.method('users.get')
             dialogs = pool.method('messages.getDialogs')
 
+        self.leave_chats = leave_chats
+        self.delete_dialogs = delete_dialogs
+
         self.user_id = user.result[0]['id']
         dialog_count = dialogs.result['count']
 
@@ -51,6 +41,20 @@ class VkDialogBackuper(VkApi):
         self.dialogs = []
         for dialog in tqdm(self.get_all_dialogs(), total=dialog_count, leave=False):
             self.dialogs.append(dialog)
+
+        self.alias = {}
+
+        if directory:
+            self.output = 'dir'
+            self.directory = directory
+        else:
+            self.output = 'zip'
+            if not filename:
+                filename = 'vk-dialog-backup-{}.zip'.format(datetime.now().strftime('%m-%d-%Y-%H-%M-%S'))
+            elif os.path.splitext(filename)[1] != '.zip':
+                filename += '.zip'
+            logger.info('Открытие файла ' + filename)
+            self.zipf = ZipFile(filename, 'w')
 
     def auth_handler(self):
         logger.info('Необходимо подтверждение авторизации')
@@ -64,14 +68,15 @@ class VkDialogBackuper(VkApi):
     def get_all_messages(self, **kwargs):
         return self.tools.get_all_iter('messages.getHistory', 200, kwargs)
 
-    def backup(self):
+    def run(self):
         try:
-            self._run_backup()
-        except:
-            self.zipf.close()
-            raise
+            self._run()
+        finally:
+            self._write('alias.json', self._dumps(self.alias))
+            if self.output == 'zip':
+                self.zipf.close()
 
-    def _run_backup(self):
+    def _run(self):
         for dialog in self.dialogs:
             preview = dialog['message']
             chat_id = preview.get('chat_id')
@@ -81,8 +86,8 @@ class VkDialogBackuper(VkApi):
                 logger.info('Обработка беседы {} ({})'.format(chat_id, preview['title']))
             else:
                 peer_id = preview['user_id']
-                filename = 'user_{}.json'.format(peer_id)
-                logger.info('Обработка диалога с пользователем {}'.format(peer_id))
+                filename = 'user_{}.json'.format(preview['user_id'])
+                logger.info('Обработка диалога с пользователем {}'.format(preview['user_id']))
 
             if self.leave_chats:
                 if chat_id and not (preview['action'] == 'chat_kick_user' and preview['action_mid'] == self.user_id):
@@ -101,16 +106,23 @@ class VkDialogBackuper(VkApi):
             users = self.vk.users.get(user_ids=','.join(members))
             names = {u['id']: u['first_name'] + ' ' + u['last_name'] for u in users}
 
-            self._write(filename, json.dumps({'names': names, 'items': messages}, indent=4, ensure_ascii=False))
-            logger.info('Сохранено ' + filename)
+            self._write(filename, self._dumps({'names': names, 'items': messages}))
+
+            self.alias[filename] = preview['title'] if chat_id else names[preview['user_id']]
 
             if self.delete_dialogs:
                 self.vk.messages.delete_dialog(peer_id=peer_id)
 
-    def _zip_write(self, filename, content):
-        with self.zipf.open(filename, 'w') as file:
-            file.write(content.encode())
+    def _dumps(self, obj):
+        return json.dumps(obj, indent=4, ensure_ascii=False)
 
-    def _dir_write(self, filename, content):
-        with open(os.path.join(self.directory, filename), 'w') as file:
-            file.write(content)
+    def _write(self, filename, content):
+        logger.info('Сохранение файла ' + filename)
+
+        if self.output == 'zip':
+            with self.zipf.open(filename, 'w') as file:
+                file.write(content.encode())
+
+        elif self.output == 'dir':
+            with open(os.path.join(self.directory, filename), 'w') as file:
+                file.write(content)
